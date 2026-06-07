@@ -1,6 +1,6 @@
 # Ideophone Arena demo contract
 
-Date: 2026-06-05
+Date: 2026-06-07
 Deadline: 2026-06-05
 
 ## Purpose
@@ -15,9 +15,11 @@ Local backend:
 http://localhost:8081
 ```
 
-## Supported demo settings
+## Supported session-start settings
 
-The final demo supports:
+`conditionName` and `difficultyLevel` are required in `POST /api/game/sessions`.
+
+The stable demo path uses:
 
 ```json
 {
@@ -26,7 +28,7 @@ The final demo supports:
 }
 ```
 
-Other seeded conditions may work:
+The externally supported condition values are:
 
 ```text
 CONDITION_1_SOKUON
@@ -35,9 +37,68 @@ CONDITION_3_SOKUON
 ```
 
 Do not expose arbitrary difficulty selection. Difficulty values above `1` are not seeded and must not be selectable in the frontend.
-The backend rejects `difficultyLevel` values other than `1` with `400 Bad Request`.
-Unknown `conditionName` values are rejected with `400 Bad Request`. Known seeded condition enum values may work, but
-`CONDITION_1_SOKUON` is the only supported final-demo setting.
+The backend rejects missing or unsupported `difficultyLevel` values with `400 Bad Request`; only `1` is supported.
+The backend rejects missing or unsupported `conditionName` values with `400 Bad Request`. `TEXT_ONLY` is an internal enum
+value used by tests and legacy data paths, not an externally supported session-start condition.
+
+## Script Lab frontend assumptions
+
+The frontend may safely build a first Script Lab control around these request values:
+
+```text
+CONDITION_1_SOKUON
+CONDITION_2_SOKUON
+CONDITION_3_SOKUON
+```
+
+The user-facing labels should stay frontend-owned. Recommended labels are `Audio-only`, `Script match`, and
+`Script mismatch`. The backend contract is the enum string, not the label text.
+
+For Script Lab, keep sending:
+
+```json
+{
+  "conditionName": "CONDITION_1_SOKUON",
+  "difficultyLevel": 1
+}
+```
+
+with `conditionName` swapped to one of the three supported values. Do not send `TEXT_ONLY`. Do not expose difficulty
+selection; `difficultyLevel` remains locked to `1`.
+
+Round responses for all three supported conditions expose the rendering fields the frontend currently needs:
+
+```text
+completed
+message
+sessionUuid
+roundId
+targetTranslation
+prompt
+conditionName
+difficultyLevel
+translations.target
+translations.other
+left.ideophoneId
+left.kana
+left.romaji
+left.stimulusFile
+left.stimulusUrl
+left.modality
+left.canonicalScript
+right.ideophoneId
+right.kana
+right.romaji
+right.stimulusFile
+right.stimulusUrl
+right.modality
+right.canonicalScript
+timing.fixationMs
+timing.preChoiceDelayMs
+```
+
+The current backend still serves legacy derived media through `/stimuli/**`. Script/audio/placeholder presentation
+decisions remain frontend behavior for now; no new backend `GameMode` or `PresentationMode` field exists yet.
 
 ## Authentication
 

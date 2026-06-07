@@ -370,3 +370,67 @@ Rendered browser click-through remains unverified.
 
 Next single task:
 Run the rendered browser demo at `http://localhost:8081/` or `http://localhost:5174` and confirm the completion screen/status after the final round.
+
+## 2026-06-07
+
+Session goal: Add first Phase 2 research-flavor vertical slice.
+
+Changed: Added frontend research notes after answer feedback using current round, selected/correct answer, modality, correctness, and condition.
+
+Proof: npm run lint passed. npm run build passed. Browser verification passed with 30 answered rounds, completion visible, leaderboard/recent attempts visible, 360 successful /stimuli/ requests, 0 muted stimulus elements, 0 failed requests, and 0 relevant console errors.
+
+Result: Phase 2 frontend-only research flavor slice completed without backend/schema/auth/scoring changes.
+
+Commit: TODO
+
+Blocker: Technical review pass not yet done.
+
+Next single task: Run backend and frontend technical review before adding Script Lab mode.
+
+## 2026-06-07
+
+Session goal:
+Harden backend session-start contract before frontend Script Lab mode.
+
+Changed:
+Required `conditionName` and `difficultyLevel` in `StartSessionRequest`; removed session-start defaults from `GameService`; added service-layer validation for `CONDITION_1_SOKUON`, `CONDITION_2_SOKUON`, and `CONDITION_3_SOKUON`; rejected `TEXT_ONLY` and unsupported difficulty values with clear `400` errors; updated MockMvc/service tests plus contract, runbook, and checklist docs.
+
+Proof:
+`./mvnw test`
+`./mvnw spring-boot:run -Dspring-boot.run.arguments=--server.port=18081`
+
+Result:
+Passing: 23 tests. MockMvc covers missing condition, missing difficulty, unsupported difficulty, `TEXT_ONLY` rejection, supported condition session creation for all three sokuon conditions, and seeded difficulty-1 rounds for all three supported conditions. A temporary server on `18081` started and shut down cleanly, but live mutation curl proof for register/session creation and `TEXT_ONLY` rejection failed from the separate sandbox curl process with `curl exit 7` / status `000`.
+
+Commit:
+Not committed.
+
+Blocker:
+Live mutation curl proof was blocked by local socket/runtime inconsistency; tests and MockMvc proof passed.
+
+Next single task:
+Add ownership, duplicate-answer, CORS preflight, and recent-attempt authentication tests before implementing Script Lab UI.
+
+## 2026-06-07
+
+Session goal:
+Prepare the backend Phase 2 game-mode contract without schema or endpoint redesign.
+
+Changed:
+Inspected the current backend layers and the Phase 2 roadmap. Added MockMvc coverage proving all three supported sokuon conditions can start sessions and fetch renderable first rounds at difficulty 1. Added `docs/phase-2-api-plan.md` for future `GameMode`, `PresentationMode`, `RoundTemplate`, `StimulusAsset`, and `RatingAttempt` extension points. Updated `docs/backend-contract.md` with Script Lab frontend assumptions and updated checklist evidence.
+
+Proof:
+`./mvnw test`
+Live curl against `http://localhost:8081/api/game/sessions`
+
+Result:
+Passing: 24 tests. Live curl returned `201 Created` for `CONDITION_1_SOKUON`, `CONDITION_2_SOKUON`, and `CONDITION_3_SOKUON` with `difficultyLevel: 1`, and `400 Bad Request` for `TEXT_ONLY`.
+
+Commit:
+Not committed.
+
+Blocker:
+None.
+
+Next single task:
+Add ownership, duplicate-answer, CORS preflight, and recent-attempt authentication tests before implementing Script Lab UI.

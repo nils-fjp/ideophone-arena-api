@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
@@ -20,6 +21,7 @@ import io.github.nilsfjp.ideophonearena.repository.AppUserRepository;
 import io.github.nilsfjp.ideophonearena.repository.ArenaRoundRepository;
 import io.github.nilsfjp.ideophonearena.repository.GameSessionRepository;
 import io.github.nilsfjp.ideophonearena.repository.IdeophoneRepository;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,6 +33,12 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest
 @AutoConfigureMockMvc
 class GameLoopHttpTests {
+
+    private static final List<ConditionName> SUPPORTED_SOKUON_CONDITIONS = List.of(
+            ConditionName.CONDITION_1_SOKUON,
+            ConditionName.CONDITION_2_SOKUON,
+            ConditionName.CONDITION_3_SOKUON
+    );
 
     @Autowired
     private MockMvc mockMvc;
@@ -116,7 +124,133 @@ class GameLoopHttpTests {
                         .content("""
                                 {"conditionName":"CONDITION_1_SOKUON","difficultyLevel":2}
                                 """))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Only difficulty level 1 is supported for the current demo"));
+    }
+
+    @Test
+    void startSessionRequiresConditionName() throws Exception {
+        String username = "missing_condition_" + System.nanoTime();
+        String token = registerAndGetToken(username);
+
+        mockMvc.perform(post("/api/game/sessions")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"difficultyLevel":1}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.validationErrors.conditionName").exists());
+    }
+
+    @Test
+    void startSessionRequiresDifficultyLevel() throws Exception {
+        String username = "missing_difficulty_" + System.nanoTime();
+        String token = registerAndGetToken(username);
+
+        mockMvc.perform(post("/api/game/sessions")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"conditionName":"CONDITION_1_SOKUON"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.validationErrors.difficultyLevel").exists());
+    }
+
+    @Test
+    void startSessionRejectsTextOnlyCondition() throws Exception {
+        String username = "text_only_condition_" + System.nanoTime();
+        String token = registerAndGetToken(username);
+
+        mockMvc.perform(post("/api/game/sessions")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"conditionName":"TEXT_ONLY","difficultyLevel":1}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "Unsupported conditionName: TEXT_ONLY. Supported values are CONDITION_1_SOKUON, CONDITION_2_SOKUON, CONDITION_3_SOKUON"
+                ));
+    }
+
+    @Test
+    void startSessionCreatesSessionsForSupportedSokuonConditions() throws Exception {
+        String username = "supported_conditions_" + System.nanoTime();
+        String token = registerAndGetToken(username);
+
+        for (ConditionName conditionName : SUPPORTED_SOKUON_CONDITIONS) {
+            String sessionJson = mockMvc.perform(post("/api/game/sessions")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"conditionName":"%s","difficultyLevel":1}
+                                    """.formatted(conditionName.name())))
+                    .andExpect(status().isCreated())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString();
+
+            assertEquals(conditionName.name(), JsonPath.read(sessionJson, "$.conditionName"));
+            assertEquals(1, ((Number) JsonPath.read(sessionJson, "$.difficultyLevel")).intValue());
+            assertNotNull(JsonPath.read(sessionJson, "$.sessionUuid"));
+        }
+    }
+
+    @Test
+    void supportedSokuonConditionsCanFetchRenderableFirstRound() throws Exception {
+        String username = "supported_rounds_" + System.nanoTime();
+        String token = registerAndGetToken(username);
+
+        for (ConditionName conditionName : SUPPORTED_SOKUON_CONDITIONS) {
+            String sessionJson = mockMvc.perform(post("/api/game/sessions")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"conditionName":"%s","difficultyLevel":1}
+                                    """.formatted(conditionName.name())))
+                    .andExpect(status().isCreated())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString();
+            String sessionUuid = JsonPath.read(sessionJson, "$.sessionUuid");
+
+            String roundJson = mockMvc.perform(get("/api/game/sessions/{sessionUuid}/rounds/next", sessionUuid)
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                    .andExpect(status().isOk())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString();
+
+            assertEquals(Boolean.FALSE, JsonPath.read(roundJson, "$.completed"));
+            assertEquals(conditionName.name(), JsonPath.read(roundJson, "$.conditionName"));
+            assertEquals(1, ((Number) JsonPath.read(roundJson, "$.difficultyLevel")).intValue());
+            assertNotNull(JsonPath.read(roundJson, "$.roundId"));
+            assertNotNull(JsonPath.read(roundJson, "$.targetTranslation"));
+            assertNotNull(JsonPath.read(roundJson, "$.translations.target"));
+            assertNotNull(JsonPath.read(roundJson, "$.left.ideophoneId"));
+            assertNotNull(JsonPath.read(roundJson, "$.left.kana"));
+            assertNotNull(JsonPath.read(roundJson, "$.left.stimulusUrl"));
+            assertNotNull(JsonPath.read(roundJson, "$.left.modality"));
+            assertNotNull(JsonPath.read(roundJson, "$.left.canonicalScript"));
+            assertNotNull(JsonPath.read(roundJson, "$.right.ideophoneId"));
+            assertNotNull(JsonPath.read(roundJson, "$.right.kana"));
+            assertNotNull(JsonPath.read(roundJson, "$.right.stimulusUrl"));
+            assertNotNull(JsonPath.read(roundJson, "$.right.modality"));
+            assertNotNull(JsonPath.read(roundJson, "$.right.canonicalScript"));
+            assertNotNull(JsonPath.read(roundJson, "$.timing.fixationMs"));
+        }
+    }
+
+    @Test
+    void seedDataContainsDifficultyOneRoundsForSupportedSokuonConditions() {
+        for (ConditionName conditionName : SUPPORTED_SOKUON_CONDITIONS) {
+            long roundCount = arenaRoundRepository.countByConditionNameAndDifficultyLevel(conditionName, 1);
+            assertTrue(roundCount > 0, conditionName + " must have seeded difficulty-1 rounds");
+        }
     }
 
     @Test

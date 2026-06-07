@@ -102,7 +102,7 @@ rg -n "@Transactional" src/main/java/io/github/nilsfjp/ideophonearena/service
 rg -n "BadRequestException|ConflictException|ForbiddenException|ResourceNotFoundException|AuthenticationFailedException" src/main/java/io/github/nilsfjp/ideophonearena/service
 ```
 
-2026-06-04 evidence: no `ResponseEntity` references exist under `service`; `AuthService`, `GameService`, and `ScoreService` have transactional boundaries. `GameService` now rejects unsupported difficulty with `BadRequestException`, owns answer correctness evaluation, and rejects duplicate or invalid answers. Mapping is mostly in `GameMapper`, while `AuthService` and answer feedback still construct small response DTOs directly. Open Session in View is disabled in `application.properties`.
+2026-06-07 evidence: no `ResponseEntity` references exist under `service`; `AuthService`, `GameService`, and `ScoreService` have transactional boundaries. `GameService` rejects unsupported session-start difficulty, rejects unsupported session-start conditions such as `TEXT_ONLY`, owns answer correctness evaluation, and rejects duplicate or invalid answers. Mapping is mostly in `GameMapper`, while `AuthService` and answer feedback still construct small response DTOs directly. Open Session in View is disabled in `application.properties`.
 
 ### Repositories
 
@@ -181,7 +181,7 @@ rg -n "jakarta.validation" src/main/java/io/github/nilsfjp/ideophonearena/dto
 rg -n "@Entity" src/main/java/io/github/nilsfjp/ideophonearena/dto
 ```
 
-2026-06-04 evidence: request DTOs use Bean Validation, including positive answer IDs; DTO package grep found no JPA annotations; password fields appear only on login/register request DTOs, not responses.
+2026-06-07 evidence: request DTOs use Bean Validation, including required session-start `conditionName`, required positive `difficultyLevel`, and positive answer IDs; DTO package grep found no JPA annotations; password fields appear only on login/register request DTOs, not responses.
 
 ### Mappers
 
@@ -321,10 +321,14 @@ rg -n "@RestControllerAdvice|@ExceptionHandler|extends RuntimeException" src/mai
 
 - [x] Session start requires authenticated user.
 - [x] Session start accepts a request DTO.
-- [x] Session start rejects unsupported difficulty values or normalizes to supported values intentionally.
-- [x] Session start rejects unsupported condition names or handles them intentionally.
+- [x] Session start requires `conditionName`.
+- [x] Session start requires `difficultyLevel`.
+- [x] Session start rejects unsupported difficulty values.
+- [x] Session start rejects unsupported condition names.
+- [x] Session start rejects `TEXT_ONLY` as an externally requested condition.
 - [x] For the current demo, `difficultyLevel: 1` is supported.
-- [x] For the current demo, `CONDITION_1_SOKUON` is supported.
+- [x] For the current demo and Phase 2 Script Lab preparation, `CONDITION_1_SOKUON`, `CONDITION_2_SOKUON`, and `CONDITION_3_SOKUON` are supported at difficulty `1`.
+- [x] Seed data contains difficulty-1 rounds for all three externally supported sokuon conditions.
 - [x] Session ownership is stored and enforced.
 
 Proof:
@@ -336,7 +340,7 @@ curl -i -X POST http://localhost:8081/api/game/sessions \
   -d '{"conditionName":"CONDITION_1_SOKUON","difficultyLevel":1}'
 ```
 
-2026-06-04 evidence: `GameController.startSession` is authenticated and accepts `StartSessionRequest`; `GameService.startSession` stores the owner and rejects `difficultyLevel != 1`; `GameLoopHttpTests.startSessionRejectsUnsupportedDifficulty` verifies `400 Bad Request`; `GameLoopHttpTests.startSessionRejectsUnknownConditionName` verifies unknown condition names return `400 Bad Request`. Known seeded condition enum values may work, but `CONDITION_1_SOKUON` is documented as the only final-demo setting.
+2026-06-07 evidence: `GameController.startSession` is authenticated and accepts `@Valid StartSessionRequest`; `StartSessionRequest` requires `conditionName` and positive `difficultyLevel`; `GameService.startSession` stores the owner, requires difficulty `1`, and allowlists only `CONDITION_1_SOKUON`, `CONDITION_2_SOKUON`, and `CONDITION_3_SOKUON` for external session start. `GameLoopHttpTests` verifies missing `conditionName` returns `400`, missing `difficultyLevel` returns `400`, unsupported difficulty returns `400`, `TEXT_ONLY` returns `400`, all three supported sokuon conditions create sessions at difficulty `1`, all three can fetch a renderable first round, and seeded difficulty-1 rounds exist for all three supported sokuon conditions.
 
 ### Round retrieval
 
@@ -437,7 +441,7 @@ Proof:
 ./mvnw spring-boot:run
 ```
 
-2026-06-05 evidence: `./mvnw test` passed with 16 tests. Spring Boot test contexts started, connected to local MySQL, served static frontend resources through MockMvc, registered users, started sessions, fetched rounds, submitted answers, verified unsupported difficulty and unknown condition names return `400`, and verified next-round completion now returns `200 OK` with `completed:true`. Live curl proof against a freshly started `./mvnw spring-boot:run` process returned: health `200`, register `201`, login `200`, authenticated session start `201`, answered 30 rounds through the API, final next-round completion `200` with `{"completed":true,"message":"Game session is complete","sessionUuid":"5605288c-a2eb-4cec-8b1c-82d45a3957b8","conditionName":"CONDITION_1_SOKUON","difficultyLevel":1,"roundId":null}`, recent attempts `200`, and leaderboard `200`.
+2026-06-07 evidence: `./mvnw test` passed with 24 tests. Spring Boot test contexts started, connected to local MySQL, served static frontend resources through MockMvc, registered users, started sessions, fetched rounds, submitted answers, verified missing session-start fields return validation `400`s, verified unsupported difficulty and `TEXT_ONLY` return clear `400`s, verified all three supported sokuon conditions can create difficulty-1 sessions and fetch renderable first rounds, verified seeded difficulty-1 rounds exist for those conditions, and verified next-round completion returns `200 OK` with `completed:true`. Live curl proof against the running `http://localhost:8081` backend returned `201 Created` for `CONDITION_1_SOKUON`, `CONDITION_2_SOKUON`, and `CONDITION_3_SOKUON` with `difficultyLevel: 1`, and `400 Bad Request` for `TEXT_ONLY`.
 
 ## Documentation checklist
 
@@ -483,4 +487,5 @@ Update this section after each architecture pass.
 - [x] Verified no entities leak through API responses.
 - [x] Verified no local credentials are tracked.
 - [x] Verified CORS includes the active frontend origin.
+- [x] Verified session start externally supports only the three sokuon conditions at difficulty `1`.
 - [ ] Live browser click-through still needs to be run outside MockMvc.
