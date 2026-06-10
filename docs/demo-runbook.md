@@ -22,20 +22,17 @@ curl -i http://localhost:8081/api/health
 
 ## Start Frontend
 
-The backend workspace now includes a small Spring-served frontend for the trial loop:
+The Vite app is the only frontend. The legacy Spring-served mini-frontend at `http://localhost:8081/` was removed
+(2026-06-10); the backend serves the API and `/stimuli/**` media only. A quick proof that it is gone:
 
-```text
-http://localhost:8081/
+```sh
+curl -i http://localhost:8081/
 ```
 
-It uses the same `/api/auth`, `/api/game/sessions`, `/rounds/next`, and `/answers` endpoints as the Vite app. If the
-browser blocks unmuted media playback, the active stimulus card shows a `Play` button.
+Expected: `401 Unauthorized` (the path is no longer permitted or served).
 
 Stimulus media is served from `/stimuli/<filename>`. The default local configuration checks
-`classpath:/static/stimuli/` and `/code/js/ideophone-arena-web/dist/stimuli/`; override `app.stimuli.locations` if your
-media files live elsewhere.
-
-The separate Vite frontend can still be run from `/code/js/ideophone-arena-web`:
+`/code/js/ideophone-arena-web/dist/stimuli/`; override `app.stimuli.locations` if your media files live elsewhere.
 
 From `/code/js/ideophone-arena-web`:
 

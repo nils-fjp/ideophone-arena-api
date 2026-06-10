@@ -171,10 +171,17 @@ Request body:
 }
 ```
 
+All three fields are required. `responseTimeMs` must be between `0` and `600000` (10 minutes); out-of-range or
+missing values return `400` with a `validationErrors` map. Submitting an answer for a round already answered in
+the session returns `409 Conflict`, including under concurrent duplicate submissions.
+
 ## Completion behavior
 
 When there are no more unanswered rounds, the next-round endpoint returns `200 OK` with an explicit completion DTO.
 The frontend must treat `completed: true` as normal session completion, not as an error or automatic reset.
+
+The session is marked complete server-side when the final answer is submitted (`POST .../answers`); the next-round
+`GET` is read-only and never mutates the session (changed 2026-06-10, response shape unchanged).
 
 Response body:
 
@@ -200,7 +207,10 @@ completion easy to distinguish from a real `404 Not Found`, such as an invalid s
 
 ## Progress display
 
-Do not rely on cumulative user-wide totals for per-session remaining count. The frontend should maintain session-local answered/correct counts, or the backend should provide session-scoped totals.
+The `totalAnswered` and `totalCorrect` fields in the answer response are scoped to the current session
+(changed 2026-06-10; they were previously cumulative user-wide totals across all sessions). They can be used
+directly for per-session progress. The frontend may still keep its own session-local counts; the change is
+non-breaking for clients that do.
 
 ## Leaderboard
 
@@ -221,3 +231,14 @@ GET /api/game/me/attempts
 ```
 
 This is enough for minimal personal progress/history.
+
+## Changelog
+
+- 2026-06-10: `totalAnswered`/`totalCorrect` in the answer response are now session-scoped (previously cumulative
+  user-wide totals). Non-breaking for the Vite frontend, which keeps its own session-local counts.
+- 2026-06-10: session completion is set by the final `POST .../answers`; `GET .../rounds/next` is read-only.
+  The `completed: true` response shape is unchanged.
+- 2026-06-10: `responseTimeMs` is required and bounded to `0..600000`; duplicate answer submissions return `409`
+  even under concurrent requests.
+- 2026-06-10: the legacy Spring-served mini-frontend (`/`, `/index.html`, `/arena.css`, `/arena.js`) was removed;
+  the backend serves the API and public `GET`/`HEAD` `/stimuli/**` only. The Vite app is the only frontend.

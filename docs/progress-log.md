@@ -460,3 +460,29 @@ None.
 
 Next single task:
 Migrate the frontend to render `displayForm`/`canonicalForm` and play the per-word audio, removing its runtime script derivation from `canonicalScript`.
+
+## 2026-06-10 (session 2)
+
+Session goal:
+Backend hygiene batch: close the June-audit architecture violations (validation, mapping consolidation), fix two correctness bugs (lifetime-scoped score totals, completion mutation on GET), translate the duplicate-answer race to 409, remove the legacy Spring-served mini-frontend, and land the dropped S1 riders (JWT secret fail-fast, ddl-auto confirmation).
+
+Changed:
+`SubmitAnswerRequest.responseTimeMs` is now `@NotNull @Min(0) @Max(600000)`; the redundant null presence checks were removed from `GameService.validateSupportedStartRequest` (business rules for supported condition set and difficulty stay in the service). Answer-result construction and the completion DTO moved into `GameMapper` (`toAnswerResultResponse`, `toCompletedRoundResponse`); the `RoundResponse.completed(...)` static factory was deleted and the DTO is now logic-free. `submitAnswer` uses `saveAndFlush` and translates `DataIntegrityViolationException` from `UNIQUE(session_id, round_id)` into the existing `ConflictException` (409); `GlobalExceptionHandler` also maps `DataIntegrityViolationException` to 409 as backstop. Score totals switched from `countBySessionUserId*` (user lifetime) to new derived `countBySessionId`/`countBySessionIdAndCorrectTrue` (session-scoped); the old JPQL queries were removed. Session completion moved off the GET: `submitAnswer` marks the session complete when the stored answer is the last round for the session's condition/difficulty; `getNextRound` is `@Transactional(readOnly = true)` and returns the unchanged completion DTO. Deleted the legacy mini-frontend (`static/index.html`, `arena.css`, `arena.js`, empty `templates/`, plus an untracked stray browser-save HTML) and its permitAll entries in `SecurityConfig`; public surface is now OPTIONS, GET/HEAD `/stimuli/**`, `/api/health`, `/api/auth/**`, GET `/api/leaderboard`. `JwtService` lost the hard-coded secret default (`@Value("${app.jwt.secret}")` plus blank guard) and `isTokenValid` now parses/verifies the token once instead of twice. Tests: new `JwtServiceTests` (7: round-trip, wrong user, expired, tampered payload, tampered signature, wrong secret, blank-secret fail-fast); `GameServiceTests` gained duplicate-race-to-Conflict and completion-on-last-answer tests; `GameLoopHttpTests` gained responseTimeMs validation bounds and asserts completion is set by the final POST and a duplicate POST returns 409; `StaticResourceHttpTests` now proves the mini-frontend is gone (401) while stimuli stay public; `StaticFrontendContractTests` deleted with the feature. Riders: CLAUDE.md invariant 3 documents the 3-character per-word audio prefix; new `scripts/extract-audio.sh` reproduces the 60 .m4a files (ffmpeg -vn -c:a copy from the u/d mp4s); `application-local.example.properties` now ships `ddl-auto=validate`. Docs updated: contract (session-scoped totals, required bounded responseTimeMs, completion-on-POST, changelog), runbook (mini-frontend section removed, Vite is the only frontend), grading checklist (dated evidence for validation, security surface, 409 race, secrets).
+
+Proof:
+`./mvnw test`: 39 tests, 0 failures (was 41 with 3 mini-frontend failures mid-removal; the two obsolete frontend-guard tests were removed with the feature).
+Startup without `app.jwt.secret` (temporarily commented in the local profile, then restored): `PlaceholderResolutionException: Could not resolve placeholder 'app.jwt.secret' in value "${app.jwt.secret}"`.
+Live flow against `./mvnw spring-boot:run` (`ddl-auto=validate`): register 201, session 201, missing `responseTimeMs` -> 400 `{'responseTimeMs': 'must not be null'}`, `600001` -> 400 `must be less than or equal to 600000`, duplicate answer -> 409 `This round has already been answered in this session`, 30 rounds answered with `totalAnswered` ending at 30, completion GET returned the unchanged `completed:true` DTO, and the first answer of a second session by the same user returned `totalAnswered: 1` (session-scoped; previously 31).
+`curl -i http://localhost:8081/` -> 401 (also `/index.html`, `/arena.js`); `curl -I http://localhost:8081/stimuli/audio/a0h-gosogoso.m4a` -> 200; `GET /api/leaderboard` -> 200.
+
+Result:
+All S3 punch-list items and both S1 riders landed; experiment invariants untouched (no stimulus, seed, or condition changes).
+
+Commit:
+Not committed.
+
+Blocker:
+None.
+
+Next single task:
+S4: `GET /api/admin/stats` behind `hasRole("ADMIN")`.

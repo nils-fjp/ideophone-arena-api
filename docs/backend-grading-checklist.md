@@ -183,6 +183,8 @@ rg -n "@Entity" src/main/java/io/github/nilsfjp/ideophonearena/dto
 
 2026-06-07 evidence: request DTOs use Bean Validation, including required session-start `conditionName`, required positive `difficultyLevel`, and positive answer IDs; DTO package grep found no JPA annotations; password fields appear only on login/register request DTOs, not responses.
 
+2026-06-10 evidence: Bean Validation completed — `SubmitAnswerRequest.responseTimeMs` is now `@NotNull @Min(0) @Max(600000)`; redundant null presence checks were removed from `GameService.validateSupportedStartRequest` (business rules — supported condition set and difficulty value — remain in the service). `RoundResponse.completed(...)` static factory removed; completion and answer-result mapping live in `GameMapper`. `GameLoopHttpTests.submitAnswerRequiresResponseTimeWithinBounds` proves missing and out-of-range `responseTimeMs` return `400` with a `validationErrors.responseTimeMs` entry.
+
 ### Mappers
 
 - [x] Mapping is handled in dedicated mapper classes or mapper methods.
@@ -274,6 +276,8 @@ rg -n "SecurityFilterChain|requestMatchers|csrf|SessionCreationPolicy|anyRequest
 
 2026-06-10 evidence: stimulus references switched to per-word audio. `SecurityConfig` now permits both `GET` and `HEAD` on `/stimuli/**`. Live curl proof returned `200` with `Content-Type: audio/mp4` for both `GET` and `HEAD` on `http://localhost:8081/stimuli/audio/a0h-gosogoso.m4a`.
 
+2026-06-10 evidence (legacy frontend removal): the Spring-served mini-frontend (`/`, `/index.html`, `/arena.css`, `/arena.js`, `templates/`) was deleted and its permitAll entries removed from `SecurityConfig`; public surface is now OPTIONS preflight, `GET`/`HEAD` `/stimuli/**`, `/api/health`, `/api/auth/**`, and `GET /api/leaderboard`, with `anyRequest().authenticated()`. `StaticResourceHttpTests.legacyMiniFrontendIsGone` proves `/`, `/index.html`, `/arena.js`, `/arena.css` return `401`. `JwtService` no longer has a code default for `app.jwt.secret` (startup fails fast when absent or blank) and is covered by `JwtServiceTests` (round-trip, expiry, tampered payload/signature, wrong secret, blank-secret fail-fast).
+
 ### CORS
 
 - [x] CORS is configured explicitly.
@@ -316,6 +320,8 @@ rg -n "@RestControllerAdvice|@ExceptionHandler|extends RuntimeException" src/mai
 ```
 
 2026-06-05 evidence: `GlobalExceptionHandler` maps validation, unreadable request bodies, bad request, auth failure, forbidden, not found, conflict, Spring authentication, and unexpected errors to JSON. The generic fallback returns `500` with `An unexpected error occurred`, without stack traces or internal exception details. Completion no longer uses the not-found exception path; `GET /api/game/sessions/{sessionUuid}/rounds/next` returns `200 OK` with `completed:true` and message `Game session is complete`.
+
+2026-06-10 evidence: a concurrent duplicate answer no longer surfaces as `500` — `GameService.submitAnswer` uses `saveAndFlush` and translates `DataIntegrityViolationException` (from `UNIQUE(session_id, round_id)`) into the existing `ConflictException` (`409`), with a `DataIntegrityViolationException -> 409` handler in `GlobalExceptionHandler` as backstop. `GameServiceTests.submitAnswerTranslatesConcurrentDuplicateInsertToConflict` and the duplicate `POST` in `GameLoopHttpTests.nextRoundReturnsExplicitCompletionBodyAfterFinalAnswer` (expects `409`) prove the path. Session completion is now set by the final `submitAnswer`; `getNextRound` is `@Transactional(readOnly = true)` and the completion DTO shape is unchanged. `totalAnswered`/`totalCorrect` are session-scoped (`countBySessionId`/`countBySessionIdAndCorrectTrue`).
 
 ## Game domain correctness
 
@@ -427,6 +433,8 @@ rg -n "spring\\.datasource|password=|username=|app\\.jwt\\.secret" src/main/reso
 ```
 
 2026-06-04 evidence: `application-local.properties` contains local credentials but is ignored and not tracked; `git ls-files` lists only `.gitignore`, `application.properties`, and `application-local.example.properties`; the tracked example uses placeholders. `./mvnw test` starts Spring contexts against local MySQL on port `8081`.
+
+2026-06-10 evidence: `app.jwt.secret` has no code default — `JwtService` uses `@Value("${app.jwt.secret}")` plus a blank-value guard, so startup fails fast with a clear error when the property is absent or blank (`JwtServiceTests.blankSecretFailsFastAtConstruction`). The local profile uses `spring.jpa.hibernate.ddl-auto=validate` (verified directly); the tracked example template now also ships `validate` per the all-profiles rule.
 
 ## Build and test proof
 
