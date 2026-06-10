@@ -1,5 +1,6 @@
 package io.github.nilsfjp.ideophonearena.mapper;
 
+import io.github.nilsfjp.ideophonearena.dto.AnswerResultResponse;
 import io.github.nilsfjp.ideophonearena.dto.AttemptResponse;
 import io.github.nilsfjp.ideophonearena.dto.GameSessionResponse;
 import io.github.nilsfjp.ideophonearena.dto.IdeophoneChoiceResponse;
@@ -39,6 +40,26 @@ public class GameMapper {
                 toIdeophoneResponse(round.getLeftIdeophone()),
                 toIdeophoneResponse(round.getRightIdeophone()),
                 new TimingResponse(FIXATION_MS, PRE_CHOICE_DELAY_MS)
+        );
+    }
+
+    public RoundResponse toCompletedRoundResponse(GameSession session, String message) {
+        return new RoundResponse(true, message, session.getSessionUuid(), null, null,
+                session.getConditionName(), session.getDifficultyLevel(), null, null, null, null);
+    }
+
+    public AnswerResultResponse toAnswerResultResponse(ArenaRound round, Ideophone selectedIdeophone,
+            PlayerAnswer answer, long totalAnswered, long totalCorrect) {
+        return new AnswerResultResponse(
+                round.getId(),
+                selectedIdeophone.getId(),
+                round.getCorrectIdeophone().getId(),
+                answer.isCorrect(),
+                round.getPrompt(),
+                round.getCorrectIdeophone().getKana(),
+                selectedIdeophone.getKana(),
+                totalAnswered,
+                totalCorrect
         );
     }
 

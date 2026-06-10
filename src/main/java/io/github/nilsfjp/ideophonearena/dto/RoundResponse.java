@@ -23,7 +23,7 @@ public class RoundResponse {
                 right, timing);
     }
 
-    private RoundResponse(boolean completed, String message, String sessionUuid, Long roundId, String targetTranslation,
+    public RoundResponse(boolean completed, String message, String sessionUuid, Long roundId, String targetTranslation,
             ConditionName conditionName, int difficultyLevel, TranslationResponse translations,
             IdeophoneChoiceResponse left, IdeophoneChoiceResponse right, TimingResponse timing) {
         this.completed = completed;
@@ -37,12 +37,6 @@ public class RoundResponse {
         this.left = left;
         this.right = right;
         this.timing = timing;
-    }
-
-    public static RoundResponse completed(String sessionUuid, ConditionName conditionName, int difficultyLevel,
-            String message) {
-        return new RoundResponse(true, message, sessionUuid, null, null, conditionName, difficultyLevel, null, null,
-                null, null);
     }
 
     public boolean isCompleted() {
