@@ -129,13 +129,35 @@ KANA_TOKENS = {
 }
 
 
+# The stimulus PNGs render these two long-vowel words with the chouonpu in both
+# scripts; the lemma kana column keeps the plain-vowel dictionary spelling.
+LONG_VOWEL_FORMS = {
+    "zyaazyaa": ("じゃーじゃー", "ジャージャー"),
+    "kyaakyaa": ("きゃーきゃー", "キャーキャー"),
+}
+
+# Source-spreadsheet typo kept out of the seed (ids 47/107/167).
+GLOSS_FIXES = {
+    "refreshingly, with a feeling fo relief": "refreshingly, with a feeling of relief",
+}
+
+
+def to_katakana(hiragana: str) -> str:
+    return "".join(
+        chr(ord(ch) + 0x60) if 0x3041 <= ord(ch) <= 0x3096 else ch for ch in hiragana
+    )
+
+
 @dataclass(frozen=True)
 class Stimulus:
     kana: str
+    display_form: str
+    canonical_form: str
     romaji: str
     gloss: str
     canonical_script: str
     stimulus_file: str
+    audio_file: str
     modality: str
 
 
@@ -253,7 +275,7 @@ def validate_unique_constraints(ideophones: OrderedDict[str, Stimulus]) -> None:
 
 
 def stimulus_from_row(row: dict[str, str], word_column: str, meaning_column: str | None) -> Stimulus:
-    _pairing, script, romaji = parse_stimulus_file(row[word_column])
+    pairing, script, romaji = parse_stimulus_file(row[word_column])
     kana = romaji_to_hiragana(romaji)
     gloss = row[meaning_column] if meaning_column else ""
 
@@ -264,13 +286,28 @@ def stimulus_from_row(row: dict[str, str], word_column: str, meaning_column: str
             gloss = row["meaning-b"]
         else:
             raise ValueError(f"No meaning found for {row[word_column]}")
+    gloss = GLOSS_FIXES.get(gloss, gloss)
+
+    hiragana_form, katakana_form = LONG_VOWEL_FORMS.get(romaji, (kana, to_katakana(kana)))
+    code = script.upper()
+    canonical_form = hiragana_form if code[0] == "H" else katakana_form
+    if code[1] == "H":
+        display_form = hiragana_form
+    elif code[1] == "K":
+        display_form = katakana_form
+    else:
+        # u/d audio-only rows: the word is only ever shown at feedback reveal.
+        display_form = canonical_form
 
     return Stimulus(
         kana=kana,
+        display_form=display_form,
+        canonical_form=canonical_form,
         romaji=romaji,
         gloss=gloss,
-        canonical_script=script.upper(),
+        canonical_script=code,
         stimulus_file=row[word_column],
+        audio_file=f"audio/{pairing}{code[0].lower()}-{romaji}.m4a",
         modality=row["modality"].upper(),
     )
 
@@ -318,11 +355,12 @@ def render_sql(ideophones: OrderedDict[str, Stimulus], rounds: list[Round]) -> s
         "CREATE TABLE ideophones (",
         "    id BIGINT NOT NULL AUTO_INCREMENT,",
         "    kana VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,",
+        "    display_form VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,",
+        "    canonical_form VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,",
         "    romaji VARCHAR(100) NOT NULL,",
         "    gloss VARCHAR(255) NOT NULL,",
         "    canonical_script VARCHAR(20) NOT NULL,",
-        "    stimulus_file VARCHAR(100) NOT NULL",
-        "        UNIQUE,",
+        "    stimulus_file VARCHAR(100) NOT NULL,",
         "    modality VARCHAR(50),",
         "",
         "    PRIMARY KEY (id),",
@@ -396,7 +434,7 @@ def render_sql(ideophones: OrderedDict[str, Stimulus], rounds: list[Round]) -> s
         ") ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;",
         "",
         "-- Seed data generated from src/main/resources/condition-*-choosing-sokuon.csv.",
-        "INSERT INTO ideophones (id, kana, romaji, gloss, canonical_script, stimulus_file, modality)",
+        "INSERT INTO ideophones (id, kana, display_form, canonical_form, romaji, gloss, canonical_script, stimulus_file, modality)",
         "VALUES",
     ]
 
@@ -407,10 +445,12 @@ def render_sql(ideophones: OrderedDict[str, Stimulus], rounds: list[Round]) -> s
                 (
                     ideophone_id,
                     stimulus.kana,
+                    stimulus.display_form,
+                    stimulus.canonical_form,
                     stimulus.romaji,
                     stimulus.gloss,
                     stimulus.canonical_script,
-                    stimulus.stimulus_file,
+                    stimulus.audio_file,
                     stimulus.modality,
                 )
             )
