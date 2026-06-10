@@ -31,7 +31,6 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/", "/index.html", "/arena.css", "/arena.js").permitAll()
                         .requestMatchers(HttpMethod.GET, "/stimuli/**").permitAll()
                         .requestMatchers(HttpMethod.HEAD, "/stimuli/**").permitAll()
                         .requestMatchers("/api/health").permitAll()

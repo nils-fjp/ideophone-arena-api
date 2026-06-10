@@ -2,9 +2,9 @@ package io.github.nilsfjp.ideophonearena.staticfrontend;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.forwardedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.file.Files;
@@ -26,19 +26,11 @@ class StaticResourceHttpTests {
     private MockMvc mockMvc;
 
     @Test
-    void servesStaticGameLoopFrontendWithoutAuthentication() throws Exception {
-        mockMvc.perform(get("/"))
-                .andExpect(status().isOk())
-                .andExpect(forwardedUrl("index.html"));
-
-        mockMvc.perform(get("/index.html"))
-                .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("Ideophone Arena")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("/arena.js")));
-
-        mockMvc.perform(get("/arena.js"))
-                .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("/api/game/sessions")));
+    void legacyMiniFrontendIsGone() throws Exception {
+        mockMvc.perform(get("/")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/index.html")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/arena.js")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/arena.css")).andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -48,6 +40,9 @@ class StaticResourceHttpTests {
         mockMvc.perform(get("/stimuli/a0hu-gosogoso.mp4"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith("video/mp4"));
+
+        mockMvc.perform(head("/stimuli/a0hu-gosogoso.mp4"))
+                .andExpect(status().isOk());
     }
 
     @Test
