@@ -1,8 +1,9 @@
 package io.github.nilsfjp.ideophonearena.dto;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
-import jakarta.validation.constraints.PositiveOrZero;
 
 public class SubmitAnswerRequest {
 
@@ -14,7 +15,9 @@ public class SubmitAnswerRequest {
     @Positive
     private Long selectedIdeophoneId;
 
-    @PositiveOrZero
+    @NotNull
+    @Min(0)
+    @Max(600000)
     private Integer responseTimeMs;
 
     public Long getRoundId() {

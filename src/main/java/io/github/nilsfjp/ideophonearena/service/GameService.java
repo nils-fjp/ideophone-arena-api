@@ -24,6 +24,7 @@ import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -67,7 +68,7 @@ public class GameService {
         return gameMapper.toSessionResponse(gameSessionRepository.save(session));
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public RoundResponse getNextRound(UserDetails userDetails, String sessionUuid) {
         AppUser user = getCurrentUser(userDetails);
         GameSession session = getOwnedSession(user, sessionUuid);
@@ -88,15 +89,7 @@ public class GameService {
             }
         }
 
-        if (session.getCompletedAt() == null) {
-            session.complete();
-        }
-        return RoundResponse.completed(
-                session.getSessionUuid(),
-                session.getConditionName(),
-                session.getDifficultyLevel(),
-                SESSION_COMPLETE_MESSAGE
-        );
+        return gameMapper.toCompletedRoundResponse(session, SESSION_COMPLETE_MESSAGE);
     }
 
     @Transactional
@@ -117,22 +110,24 @@ public class GameService {
         Ideophone selectedIdeophone = getSelectedIdeophone(round, request.getSelectedIdeophoneId());
         boolean correct = isCorrectChoice(round, selectedIdeophone);
         PlayerAnswer answer = new PlayerAnswer(session, round, selectedIdeophone, request.getResponseTimeMs(), correct);
-        playerAnswerRepository.save(answer);
+        try {
+            // Flush now so a concurrent duplicate hits UNIQUE(session_id, round_id)
+            // here instead of surfacing at commit as a 500.
+            playerAnswerRepository.saveAndFlush(answer);
+        } catch (DataIntegrityViolationException ex) {
+            throw new ConflictException("This round has already been answered in this session");
+        }
 
-        long totalAnswered = playerAnswerRepository.countBySessionUserId(user.getId());
-        long totalCorrect = playerAnswerRepository.countBySessionUserIdAndCorrectTrue(user.getId());
+        long totalAnswered = playerAnswerRepository.countBySessionId(session.getId());
+        long totalCorrect = playerAnswerRepository.countBySessionIdAndCorrectTrue(session.getId());
 
-        return new AnswerResultResponse(
-                round.getId(),
-                selectedIdeophone.getId(),
-                round.getCorrectIdeophone().getId(),
-                answer.isCorrect(),
-                round.getPrompt(),
-                round.getCorrectIdeophone().getKana(),
-                selectedIdeophone.getKana(),
-                totalAnswered,
-                totalCorrect
-        );
+        long totalRounds = arenaRoundRepository.countByConditionNameAndDifficultyLevel(
+                session.getConditionName(), session.getDifficultyLevel());
+        if (session.getCompletedAt() == null && totalAnswered == totalRounds) {
+            session.complete();
+        }
+
+        return gameMapper.toAnswerResultResponse(round, selectedIdeophone, answer, totalAnswered, totalCorrect);
     }
 
     private AppUser getCurrentUser(UserDetails userDetails) {
@@ -141,14 +136,8 @@ public class GameService {
     }
 
     private void validateSupportedStartRequest(ConditionName conditionName, Integer difficultyLevel) {
-        if (difficultyLevel == null) {
-            throw new BadRequestException("difficultyLevel is required");
-        }
         if (difficultyLevel != SUPPORTED_DIFFICULTY_LEVEL) {
             throw new BadRequestException("Only difficulty level 1 is supported for the current demo");
-        }
-        if (conditionName == null) {
-            throw new BadRequestException("conditionName is required");
         }
         if (!SUPPORTED_CONDITION_NAMES.contains(conditionName)) {
             throw new BadRequestException(
