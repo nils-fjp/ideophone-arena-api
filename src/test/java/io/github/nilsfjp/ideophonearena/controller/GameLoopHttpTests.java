@@ -254,6 +254,45 @@ class GameLoopHttpTests {
     }
 
     @Test
+    void submitAnswerRequiresResponseTimeWithinBounds() throws Exception {
+        ensureDemoRoundExists();
+        String username = "answer_validation_" + System.nanoTime();
+        String token = registerAndGetToken(username);
+
+        String sessionJson = mockMvc.perform(post("/api/game/sessions")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"conditionName":"CONDITION_1_SOKUON","difficultyLevel":1}
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String sessionUuid = JsonPath.read(sessionJson, "$.sessionUuid");
+
+        mockMvc.perform(post("/api/game/sessions/{sessionUuid}/answers", sessionUuid)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"roundId":1,"selectedIdeophoneId":1}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.validationErrors.responseTimeMs").exists());
+
+        mockMvc.perform(post("/api/game/sessions/{sessionUuid}/answers", sessionUuid)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"roundId":1,"selectedIdeophoneId":1,"responseTimeMs":600001}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.validationErrors.responseTimeMs").exists());
+    }
+
+    @Test
     void startSessionRejectsUnknownConditionName() throws Exception {
         String username = "bad_condition_" + System.nanoTime();
         String token = registerAndGetToken(username);
@@ -328,6 +367,17 @@ class GameLoopHttpTests {
                                 {"roundId":%d,"selectedIdeophoneId":%d,"responseTimeMs":789}
                                 """.formatted(isolatedRound.getId(), correct.getId())))
                 .andExpect(status().isOk());
+
+        GameSession afterFinalAnswer = gameSessionRepository.findBySessionUuid(sessionUuid).orElseThrow();
+        assertNotNull(afterFinalAnswer.getCompletedAt(), "final submitAnswer must mark the session complete");
+
+        mockMvc.perform(post("/api/game/sessions/{sessionUuid}/answers", sessionUuid)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"roundId":%d,"selectedIdeophoneId":%d,"responseTimeMs":789}
+                                """.formatted(isolatedRound.getId(), correct.getId())))
+                .andExpect(status().isConflict());
 
         String completionJson = mockMvc.perform(get("/api/game/sessions/{sessionUuid}/rounds/next", sessionUuid)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))

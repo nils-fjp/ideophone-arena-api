@@ -1,6 +1,7 @@
 package io.github.nilsfjp.ideophonearena.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.never;
@@ -12,6 +13,7 @@ import io.github.nilsfjp.ideophonearena.dto.RoundResponse;
 import io.github.nilsfjp.ideophonearena.dto.StartSessionRequest;
 import io.github.nilsfjp.ideophonearena.dto.SubmitAnswerRequest;
 import io.github.nilsfjp.ideophonearena.exception.BadRequestException;
+import io.github.nilsfjp.ideophonearena.exception.ConflictException;
 import io.github.nilsfjp.ideophonearena.mapper.GameMapper;
 import io.github.nilsfjp.ideophonearena.model.AppUser;
 import io.github.nilsfjp.ideophonearena.model.ArenaRound;
@@ -33,6 +35,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.userdetails.UserDetails;
 
 @ExtendWith(MockitoExtension.class)
@@ -184,7 +187,7 @@ class GameServiceTests {
         assertEquals(SESSION_UUID, response.getSessionUuid());
         assertEquals(ConditionName.CONDITION_1_SOKUON, response.getConditionName());
         assertEquals(1, response.getDifficultyLevel());
-        assertTrue(session.getCompletedAt() != null);
+        assertNull(session.getCompletedAt());
     }
 
     @Test
@@ -199,13 +202,15 @@ class GameServiceTests {
         when(gameSessionRepository.findBySessionUuid(SESSION_UUID)).thenReturn(Optional.of(session));
         when(arenaRoundRepository.findByIdWithIdeophones(100L)).thenReturn(Optional.of(round));
         when(playerAnswerRepository.existsBySessionIdAndRoundId(20L, 100L)).thenReturn(false);
-        when(playerAnswerRepository.countBySessionUserId(10L)).thenReturn(1L);
-        when(playerAnswerRepository.countBySessionUserIdAndCorrectTrue(10L)).thenReturn(1L);
+        when(playerAnswerRepository.countBySessionId(20L)).thenReturn(1L);
+        when(playerAnswerRepository.countBySessionIdAndCorrectTrue(20L)).thenReturn(1L);
+        when(arenaRoundRepository.countByConditionNameAndDifficultyLevel(ConditionName.CONDITION_1_SOKUON, 1))
+                .thenReturn(60L);
 
         AnswerResultResponse response = gameService.submitAnswer(userDetails, SESSION_UUID, request);
 
         ArgumentCaptor<PlayerAnswer> answerCaptor = ArgumentCaptor.forClass(PlayerAnswer.class);
-        verify(playerAnswerRepository).save(answerCaptor.capture());
+        verify(playerAnswerRepository).saveAndFlush(answerCaptor.capture());
         PlayerAnswer savedAnswer = answerCaptor.getValue();
         assertEquals(session, savedAnswer.getSession());
         assertEquals(round, savedAnswer.getRound());
@@ -221,6 +226,50 @@ class GameServiceTests {
         assertEquals("ごそごそ", response.getCorrectKana());
         assertEquals(1L, response.getTotalAnswered());
         assertEquals(1L, response.getTotalCorrect());
+        assertNull(session.getCompletedAt());
+    }
+
+    @Test
+    void submitAnswerMarksSessionCompleteWhenLastRoundIsAnswered() {
+        Ideophone left = ideophone(1L, "ごそごそ", "gosogoso", "with a rustling sound", "a0hu-gosogoso.mp4");
+        Ideophone right = ideophone(2L, "かたかた", "katakata", "clattering, rattling", "a0kd-katakata.mp4");
+        ArenaRound round = round(100L, "with a rustling sound", left, right);
+        SubmitAnswerRequest request = new SubmitAnswerRequest();
+        request.setRoundId(100L);
+        request.setSelectedIdeophoneId(1L);
+        request.setResponseTimeMs(1234);
+        when(gameSessionRepository.findBySessionUuid(SESSION_UUID)).thenReturn(Optional.of(session));
+        when(arenaRoundRepository.findByIdWithIdeophones(100L)).thenReturn(Optional.of(round));
+        when(playerAnswerRepository.existsBySessionIdAndRoundId(20L, 100L)).thenReturn(false);
+        when(playerAnswerRepository.countBySessionId(20L)).thenReturn(60L);
+        when(playerAnswerRepository.countBySessionIdAndCorrectTrue(20L)).thenReturn(45L);
+        when(arenaRoundRepository.countByConditionNameAndDifficultyLevel(ConditionName.CONDITION_1_SOKUON, 1))
+                .thenReturn(60L);
+
+        AnswerResultResponse response = gameService.submitAnswer(userDetails, SESSION_UUID, request);
+
+        assertEquals(60L, response.getTotalAnswered());
+        assertEquals(45L, response.getTotalCorrect());
+        assertTrue(session.getCompletedAt() != null);
+    }
+
+    @Test
+    void submitAnswerTranslatesConcurrentDuplicateInsertToConflict() {
+        Ideophone left = ideophone(1L, "ごそごそ", "gosogoso", "with a rustling sound", "a0hu-gosogoso.mp4");
+        Ideophone right = ideophone(2L, "かたかた", "katakata", "clattering, rattling", "a0kd-katakata.mp4");
+        ArenaRound round = round(100L, "with a rustling sound", left, right);
+        SubmitAnswerRequest request = new SubmitAnswerRequest();
+        request.setRoundId(100L);
+        request.setSelectedIdeophoneId(1L);
+        request.setResponseTimeMs(1234);
+        when(gameSessionRepository.findBySessionUuid(SESSION_UUID)).thenReturn(Optional.of(session));
+        when(arenaRoundRepository.findByIdWithIdeophones(100L)).thenReturn(Optional.of(round));
+        when(playerAnswerRepository.existsBySessionIdAndRoundId(20L, 100L)).thenReturn(false);
+        when(playerAnswerRepository.saveAndFlush(org.mockito.ArgumentMatchers.any(PlayerAnswer.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate key"));
+
+        assertThrows(ConflictException.class, () -> gameService.submitAnswer(userDetails, SESSION_UUID, request));
+        assertNull(session.getCompletedAt());
     }
 
     @Test
@@ -240,7 +289,7 @@ class GameServiceTests {
         when(playerAnswerRepository.existsBySessionIdAndRoundId(20L, 100L)).thenReturn(false);
 
         assertThrows(BadRequestException.class, () -> gameService.submitAnswer(userDetails, SESSION_UUID, request));
-        verify(playerAnswerRepository, never()).save(org.mockito.ArgumentMatchers.any(PlayerAnswer.class));
+        verify(playerAnswerRepository, never()).saveAndFlush(org.mockito.ArgumentMatchers.any(PlayerAnswer.class));
     }
 
     private ArenaRound round(Long id, String prompt, Ideophone left, Ideophone right) {
