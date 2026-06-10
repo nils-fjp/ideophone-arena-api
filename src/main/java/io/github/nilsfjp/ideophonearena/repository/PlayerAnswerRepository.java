@@ -24,16 +24,9 @@ public interface PlayerAnswerRepository extends JpaRepository<PlayerAnswer, Long
     @Query("select answer.round.id from PlayerAnswer answer where answer.session.id = :sessionId")
     List<Long> findAnsweredRoundIdsBySessionId(@Param("sessionId") Long sessionId);
 
-    @Query("select count(answer.id) from PlayerAnswer answer where answer.session.user.id = :userId")
-    long countBySessionUserId(@Param("userId") Long userId);
+    long countBySessionId(Long sessionId);
 
-    @Query("""
-            select count(answer.id)
-            from PlayerAnswer answer
-            where answer.session.user.id = :userId
-                and answer.correct = true
-            """)
-    long countBySessionUserIdAndCorrectTrue(@Param("userId") Long userId);
+    long countBySessionIdAndCorrectTrue(Long sessionId);
 
     @Query("""
             select
