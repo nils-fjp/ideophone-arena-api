@@ -33,6 +33,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/", "/index.html", "/arena.css", "/arena.js").permitAll()
                         .requestMatchers(HttpMethod.GET, "/stimuli/**").permitAll()
+                        .requestMatchers(HttpMethod.HEAD, "/stimuli/**").permitAll()
                         .requestMatchers("/api/health").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/leaderboard").permitAll()
