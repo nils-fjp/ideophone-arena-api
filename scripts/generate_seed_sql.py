@@ -141,6 +141,16 @@ GLOSS_FIXES = {
     "refreshingly, with a feeling fo relief": "refreshingly, with a feeling of relief",
 }
 
+# Dev-only admin account seeded for local demos. The hash is a frozen BCrypt
+# digest of a throwaway dev password (documented in docs/demo-runbook.md,
+# "Creating an admin"); it must stay constant so --check stays reproducible.
+# Produced once via jshell with spring-security-crypto on the class path:
+#   BCrypt.hashpw(<dev password>, BCrypt.gensalt())
+ADMIN_USERNAME = "arena_admin"
+ADMIN_EMAIL = "arena_admin@example.invalid"
+ADMIN_PASSWORD_HASH = "$2a$10$AWmwnu11Xi/MVcBlbRLB8OUYrJ7kmfjW9Qzy6tCAk38/Kw0EUGzaK"
+ADMIN_ROLE = "ROLE_ADMIN"
+
 
 def to_katakana(hiragana: str) -> str:
     return "".join(
@@ -476,6 +486,11 @@ def render_sql(ideophones: OrderedDict[str, Stimulus], rounds: list[Round]) -> s
             )
         )
     lines.extend(with_sql_commas(round_values))
+    lines.append("")
+    lines.append("-- Dev-only admin account. Throwaway password; see docs/demo-runbook.md, \"Creating an admin\".")
+    lines.append("INSERT INTO app_users (id, username, email, password_hash, role)")
+    lines.append("VALUES")
+    lines.append(sql_insert_values((1, ADMIN_USERNAME, ADMIN_EMAIL, ADMIN_PASSWORD_HASH, ADMIN_ROLE)) + ";")
     lines.append("")
 
     return "\n".join(lines)

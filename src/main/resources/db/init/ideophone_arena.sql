@@ -382,3 +382,8 @@ VALUES
 (88, 'shivering, feeling chilly', 175, 176, 176, 'CONDITION_3_SOKUON', 1),
 (89, 'with a feeling of relief', 177, 178, 177, 'CONDITION_3_SOKUON', 1),
 (90, 'with a rapid heartbeat', 179, 180, 180, 'CONDITION_3_SOKUON', 1);
+
+-- Dev-only admin account. Throwaway password; see docs/demo-runbook.md, "Creating an admin".
+INSERT INTO app_users (id, username, email, password_hash, role)
+VALUES
+(1, 'arena_admin', 'arena_admin@example.invalid', '$2a$10$AWmwnu11Xi/MVcBlbRLB8OUYrJ7kmfjW9Qzy6tCAk38/Kw0EUGzaK', 'ROLE_ADMIN');
