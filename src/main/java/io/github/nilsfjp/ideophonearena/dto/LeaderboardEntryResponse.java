@@ -3,30 +3,31 @@ package io.github.nilsfjp.ideophonearena.dto;
 public class LeaderboardEntryResponse {
 
     private String username;
-    private long totalAnswered;
-    private long totalCorrect;
-    private double accuracy;
+    private long bestSessionCorrect;
+    private long bestSessionAnswered;
+    private double bestSessionAccuracy;
 
-    public LeaderboardEntryResponse(String username, long totalAnswered, long totalCorrect, double accuracy) {
+    public LeaderboardEntryResponse(String username, long bestSessionCorrect, long bestSessionAnswered,
+            double bestSessionAccuracy) {
         this.username = username;
-        this.totalAnswered = totalAnswered;
-        this.totalCorrect = totalCorrect;
-        this.accuracy = accuracy;
+        this.bestSessionCorrect = bestSessionCorrect;
+        this.bestSessionAnswered = bestSessionAnswered;
+        this.bestSessionAccuracy = bestSessionAccuracy;
     }
 
     public String getUsername() {
         return username;
     }
 
-    public long getTotalAnswered() {
-        return totalAnswered;
+    public long getBestSessionCorrect() {
+        return bestSessionCorrect;
     }
 
-    public long getTotalCorrect() {
-        return totalCorrect;
+    public long getBestSessionAnswered() {
+        return bestSessionAnswered;
     }
 
-    public double getAccuracy() {
-        return accuracy;
+    public double getBestSessionAccuracy() {
+        return bestSessionAccuracy;
     }
 }

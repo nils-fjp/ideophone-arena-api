@@ -29,30 +29,53 @@ public interface PlayerAnswerRepository extends JpaRepository<PlayerAnswer, Long
 
     long countBySessionIdAndCorrectTrue(Long sessionId);
 
-    // Callers must pass an unsorted Pageable: a Pageable sort would be appended
-    // after the aggregate order by. The username tiebreak keeps page boundaries
-    // deterministic.
+    // One row per user: that user's best completed session (most correct
+    // answers; ties broken by fewer answers = higher accuracy, then lower
+    // session id so the row is unique). Callers must pass an unsorted Pageable:
+    // a Pageable sort would be appended after the aggregate order by. The
+    // username tiebreak keeps page boundaries deterministic.
     @Query(value = """
             select
-                user.id as userId,
-                user.username as username,
-                count(answer.id) as totalAnswers,
-                sum(case when answer.correct = true then 1 else 0 end) as correctAnswers,
-                avg(answer.responseTimeMs) as averageResponseTimeMs
-            from PlayerAnswer answer
-            join answer.session session
-            join session.user user
-            group by user.id, user.username
+                best.username as username,
+                best.correctCount as bestSessionCorrect,
+                best.answeredCount as bestSessionAnswered
+            from (
+                select
+                    user.id as userId,
+                    user.username as username,
+                    session.id as sessionId,
+                    count(answer.id) as answeredCount,
+                    sum(case when answer.correct = true then 1 else 0 end) as correctCount
+                from PlayerAnswer answer
+                join answer.session session
+                join session.user user
+                where session.completedAt is not null
+                group by session.id, user.id, user.username
+            ) best
+            where not exists (
+                select 1
+                from PlayerAnswer other
+                join other.session otherSession
+                where otherSession.user.id = best.userId
+                  and otherSession.completedAt is not null
+                  and otherSession.id <> best.sessionId
+                group by otherSession.id
+                having sum(case when other.correct = true then 1 else 0 end) > best.correctCount
+                    or (sum(case when other.correct = true then 1 else 0 end) = best.correctCount
+                        and count(other.id) < best.answeredCount)
+                    or (sum(case when other.correct = true then 1 else 0 end) = best.correctCount
+                        and count(other.id) = best.answeredCount
+                        and otherSession.id < best.sessionId)
+            )
             order by
-                sum(case when answer.correct = true then 1 else 0 end) desc,
-                count(answer.id) desc,
-                avg(answer.responseTimeMs) asc,
-                user.username asc
+                best.correctCount desc,
+                best.answeredCount asc,
+                best.username asc
             """,
             countQuery = """
             select count(distinct session.user.id)
-            from PlayerAnswer answer
-            join answer.session session
+            from GameSession session
+            where session.completedAt is not null
             """)
     Page<LeaderboardEntryProjection> findLeaderboard(Pageable pageable);
 
