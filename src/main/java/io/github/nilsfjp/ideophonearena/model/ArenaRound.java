@@ -43,17 +43,26 @@ public class ArenaRound {
     @Column(name = "difficulty_level", nullable = false)
     private int difficultyLevel = 1;
 
+    @Column(name = "is_practice", nullable = false)
+    private boolean practice;
+
     protected ArenaRound() {
     }
 
     public ArenaRound(String prompt, Ideophone leftIdeophone, Ideophone rightIdeophone, Ideophone correctIdeophone,
             ConditionName conditionName, int difficultyLevel) {
+        this(prompt, leftIdeophone, rightIdeophone, correctIdeophone, conditionName, difficultyLevel, false);
+    }
+
+    public ArenaRound(String prompt, Ideophone leftIdeophone, Ideophone rightIdeophone, Ideophone correctIdeophone,
+            ConditionName conditionName, int difficultyLevel, boolean practice) {
         this.prompt = prompt;
         this.leftIdeophone = leftIdeophone;
         this.rightIdeophone = rightIdeophone;
         this.correctIdeophone = correctIdeophone;
         this.conditionName = conditionName;
         this.difficultyLevel = difficultyLevel;
+        this.practice = practice;
     }
 
     public Long getId() {
@@ -106,5 +115,13 @@ public class ArenaRound {
 
     public void setDifficultyLevel(int difficultyLevel) {
         this.difficultyLevel = difficultyLevel;
+    }
+
+    public boolean isPractice() {
+        return practice;
+    }
+
+    public void setPractice(boolean practice) {
+        this.practice = practice;
     }
 }

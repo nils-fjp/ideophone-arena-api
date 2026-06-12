@@ -11,20 +11,21 @@ public class RoundResponse {
     private String targetTranslation;
     private ConditionName conditionName;
     private int difficultyLevel;
+    private boolean practice;
     private TranslationResponse translations;
     private IdeophoneChoiceResponse left;
     private IdeophoneChoiceResponse right;
     private TimingResponse timing;
 
     public RoundResponse(String sessionUuid, Long roundId, String targetTranslation, ConditionName conditionName,
-            int difficultyLevel, TranslationResponse translations, IdeophoneChoiceResponse left,
+            int difficultyLevel, boolean practice, TranslationResponse translations, IdeophoneChoiceResponse left,
             IdeophoneChoiceResponse right, TimingResponse timing) {
-        this(false, null, sessionUuid, roundId, targetTranslation, conditionName, difficultyLevel, translations, left,
-                right, timing);
+        this(false, null, sessionUuid, roundId, targetTranslation, conditionName, difficultyLevel, practice,
+                translations, left, right, timing);
     }
 
     public RoundResponse(boolean completed, String message, String sessionUuid, Long roundId, String targetTranslation,
-            ConditionName conditionName, int difficultyLevel, TranslationResponse translations,
+            ConditionName conditionName, int difficultyLevel, boolean practice, TranslationResponse translations,
             IdeophoneChoiceResponse left, IdeophoneChoiceResponse right, TimingResponse timing) {
         this.completed = completed;
         this.message = message;
@@ -33,6 +34,7 @@ public class RoundResponse {
         this.targetTranslation = targetTranslation;
         this.conditionName = conditionName;
         this.difficultyLevel = difficultyLevel;
+        this.practice = practice;
         this.translations = translations;
         this.left = left;
         this.right = right;
@@ -69,6 +71,10 @@ public class RoundResponse {
 
     public int getDifficultyLevel() {
         return difficultyLevel;
+    }
+
+    public boolean isPractice() {
+        return practice;
     }
 
     public TranslationResponse getTranslations() {

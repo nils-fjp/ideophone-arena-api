@@ -8,13 +8,15 @@ public class GameSessionResponse {
     private String sessionUuid;
     private int difficultyLevel;
     private ConditionName conditionName;
+    private boolean includePractice;
     private Instant startedAt;
 
     public GameSessionResponse(String sessionUuid, int difficultyLevel, ConditionName conditionName,
-            Instant startedAt) {
+            boolean includePractice, Instant startedAt) {
         this.sessionUuid = sessionUuid;
         this.difficultyLevel = difficultyLevel;
         this.conditionName = conditionName;
+        this.includePractice = includePractice;
         this.startedAt = startedAt;
     }
 
@@ -28,6 +30,10 @@ public class GameSessionResponse {
 
     public ConditionName getConditionName() {
         return conditionName;
+    }
+
+    public boolean isIncludePractice() {
+        return includePractice;
     }
 
     public Instant getStartedAt() {

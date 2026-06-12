@@ -13,6 +13,8 @@ public class StartSessionRequest {
     @NotNull
     private ConditionName conditionName;
 
+    private boolean includePractice;
+
     public Integer getDifficultyLevel() {
         return difficultyLevel;
     }
@@ -27,5 +29,13 @@ public class StartSessionRequest {
 
     public void setConditionName(ConditionName conditionName) {
         this.conditionName = conditionName;
+    }
+
+    public boolean isIncludePractice() {
+        return includePractice;
+    }
+
+    public void setIncludePractice(boolean includePractice) {
+        this.includePractice = includePractice;
     }
 }

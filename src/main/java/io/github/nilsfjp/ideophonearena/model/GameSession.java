@@ -38,6 +38,12 @@ public class GameSession {
     @Column(name = "condition_name", nullable = false, length = 50)
     private ConditionName conditionName = ConditionName.TEXT_ONLY;
 
+    @Column(name = "include_practice", nullable = false)
+    private boolean includePractice;
+
+    @Column(name = "practice_answered", nullable = false)
+    private int practiceAnswered;
+
     @CreationTimestamp
     @Column(name = "started_at", nullable = false, updatable = false)
     private Instant startedAt;
@@ -49,13 +55,22 @@ public class GameSession {
     }
 
     public GameSession(AppUser user, ConditionName conditionName, int difficultyLevel) {
+        this(user, conditionName, difficultyLevel, false);
+    }
+
+    public GameSession(AppUser user, ConditionName conditionName, int difficultyLevel, boolean includePractice) {
         this.user = user;
         this.conditionName = conditionName;
         this.difficultyLevel = difficultyLevel;
+        this.includePractice = includePractice;
     }
 
     public void complete() {
         this.completedAt = Instant.now();
+    }
+
+    public void recordPracticeAnswer() {
+        this.practiceAnswered++;
     }
 
     public Long getId() {
@@ -92,6 +107,22 @@ public class GameSession {
 
     public void setConditionName(ConditionName conditionName) {
         this.conditionName = conditionName;
+    }
+
+    public boolean isIncludePractice() {
+        return includePractice;
+    }
+
+    public void setIncludePractice(boolean includePractice) {
+        this.includePractice = includePractice;
+    }
+
+    public int getPracticeAnswered() {
+        return practiceAnswered;
+    }
+
+    public void setPracticeAnswered(int practiceAnswered) {
+        this.practiceAnswered = practiceAnswered;
     }
 
     public Instant getStartedAt() {
