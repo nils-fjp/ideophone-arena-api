@@ -582,3 +582,37 @@ None.
 
 Next single task:
 Frontend rider: update the Vite leaderboard to the `bestSessionCorrect`/`bestSessionAnswered`/`bestSessionAccuracy` fields (and optionally adopt `includePractice`).
+
+## 2026-06-12 ("Session B")
+
+Session goal:
+Deterministic per-session shuffle: a server-generated seed derives round order, target identity (deliberate extension beyond the thesis's parity-fixed targets), target side, and meaning order; sessions replay identically across restarts; answers are judged against, and store, the derived target.
+
+Changed:
+- `scripts/generate_seed_sql.py` + regenerated `ideophone_arena.sql`: `game_sessions.shuffle_seed BIGINT NOT NULL`; `player_answers.target_ideophone_id BIGINT NOT NULL` + FK to `ideophones` (approval gate cleared 2026-06-12; seed data rows unchanged).
+- `GameSession.shuffleSeed` (5-arg constructor; `GameService.startSession` fills it from a `SecureRandom`); `PlayerAnswer.targetIdeophone` (constructor param).
+- New `model/DerivedRound` (round + derived target/other/side/meaning-order, never persisted) and `service/RoundShuffler` (@Component): scored rounds ordered by id asc -> `Collections.shuffle(list, new Random(seed))` -> per shuffled round, in order, `targetIsPairSecond`/`targetOnLeft`/`targetMeaningListedFirst` from the same stream; "pair second" = higher ideophone id; practice rounds keep fixed order with draws from `new Random(seed + 1)`. Spec documented verbatim in the contract as a compatibility contract.
+- `GameService`: `getNextRound` serves the first unanswered round of the derived order (recomputed per request, nothing persisted but the seed); `submitAnswer` judges against the derived target and stores it; practice answers judged against the practice-stream derivation. `arena_rounds.correct_ideophone_id`/`prompt` are no longer read in the serving path (kept as thesis-target documentation).
+- `GameMapper`: round/answer/practice mapping from `DerivedRound` (prompt/translations = derived target/other glosses, left/right = derived sides); `toAttemptResponse` replays the stored `targetIdeophone`. `PlayerAnswerRepository`: EntityGraphs and the modality-stats join switched from `round.correctIdeophone` to `targetIdeophone`.
+- `targetMeaningListedFirst` is reserved: drawn (stream consumption final) but the current frontend always lists the target meaning first (semantic `translations.target`/`other` fields, `TrialPlayer.tsx` renders target line first) — future frontend rider, no backend change needed.
+- Tests: new `RoundShufflerTests` (7: determinism across instances, seed divergence, permutation integrity, pair-second stability under swapped left/right columns, practice-stream independence, 200-seed both-identities/both-sides sweep) and `ShuffledSessionHttpTests` (full practice-on loop: served order/sides/meanings match the derivation, stored targets match, duplicate 409, completion unchanged); `GameServiceTests` reworked derivation-aware (+restart-continuity, +derived-distractor-incorrect); `PracticeRoundHttpTests`/`LeaderboardPaginationHttpTests` adapted.
+- Docs: contract (new "Deterministic per-session shuffle" section with the verbatim derivation spec + changelog), runbook (shuffle proofs section), grading checklist (Session B evidence), punch list.
+
+Proof:
+- `python scripts/generate_seed_sql.py --check` -> "SQL is up to date: 204 ideophones, 102 rounds".
+- Reseed via mysql.exe; `./mvnw spring-boot:run` with `ddl-auto=validate` -> clean start.
+- `./mvnw test` -> 69 tests, 0 failures (was 59).
+- Live: two same-user CONDITION_1 sessions -> different first-5 sequences, same round 18 served with different targets ("crisp appearance, stiffly" vs "dim, faint, indistinct") and round 20 with different sides (left ideophone 40 vs 39). Killed and restarted the app mid-session -> `rounds/next` byte-identical before/after (round 54, same target/left/right), answered rounds stayed answered.
+- Browser (Vite 5174 + Edge CDP): `verify-browser-loop.mjs` played 2 practice + 30 scored rounds to completion with zero frontend changes, 0 console errors, 0 muted stimuli, 192/192 stimulus fetches OK; leaderboard and recent attempts rendered. Cleanup script removed the `browser_loop_%` account.
+
+Result:
+Session B complete. Identity randomization doubles the effective item pool; `player_answers.target_ideophone_id` accumulates per-target difficulty data including the 30 complementary targets the thesis never measured. DTO shapes unchanged; no frontend changes.
+
+Commit:
+Not committed (proposed message below).
+
+Blocker:
+None.
+
+Next single task:
+Frontend rider: honor `targetMeaningListedFirst` (needs a small DTO addition decided at that point) or proceed with the Phase-2 plan; also still pending from Session A: Vite leaderboard switch to `bestSession*` fields.
